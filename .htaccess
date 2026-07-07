@@ -1,0 +1,101 @@
+Options -Indexes
+
+# ── PHP limits ────────────────────────────────────────────────
+# Đồng bộ với MAX_UPLOAD_BYTES = 50MB trong js/config.js (+ headroom).
+php_value post_max_size 52M
+php_value upload_max_filesize 52M
+php_value memory_limit 256M
+php_value max_execution_time 300
+
+# ── URL rewrite ───────────────────────────────────────────────
+RewriteEngine On
+RewriteRule ^api/(.*)$ php/api.php [L,QSA]
+
+# Classifier chay noi bo (localhost:8189) — reverse-proxy qua domain chinh
+# de KHONG phai pho api.kellymoore-usa.com ra internet. Frontend goi /clf/*.
+# (mod_proxy + mod_proxy_http da bat trong httpd.conf).
+RewriteRule ^clf/(.*)$ http://localhost:8190/$1 [P,L]
+
+# ── BẢO MẬT: chặn tải trực tiếp file nhạy cảm ─────────────────
+# (Apache 2.4). data/*.json như pp.json / json/manifest.json VẪN mở — chỉ chặn
+# secret, log, DB, .env, config include-only.
+<FilesMatch "(^\.env$|^\.env\.|^auth_config\.php$|^env_loader\.php$|^db\.php$|\.log$|\.db$|\.db-wal$|\.db-shm$|\.sqlite|^client_secret_.*\.json$)">
+    Require all denied
+</FilesMatch>
+
+# Khoá thư mục công cụ admin-backup khỏi truy cập web
+RewriteRule ^admin-backup(/|$) - [F,L]
+
+# Khoá mã nguồn backend classifier (Python) — không có gì cần phục vụ qua web
+RewriteRule ^clasify(/|$) - [F,L]
+
+# Khoá thư mục tools (script deploy) + backup DB tạm
+RewriteRule ^(tools|db_backup_temp)(/|$) - [F,L]
+
+# ── GZIP compression ──────────────────────────────────────────
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/css
+    AddOutputFilterByType DEFLATE application/javascript text/javascript application/json
+    AddOutputFilterByType DEFLATE image/svg+xml
+    SetEnvIfNoCase Request_URI \.(gif|jpe?g|png|webp|avif|ico|woff2?)$ no-gzip
+</IfModule>
+
+# ── Browser caching ───────────────────────────────────────────
+<IfModule mod_expires.c>
+    ExpiresActive On
+
+    # JS — cache VĨNH VIỄN (immutable). An toàn vì mọi URL JS đã có ?v=token
+    # (tools/stamp_version.py đổi token mỗi lần deploy → URL mới, không stale).
+    # QUAN TRỌNG: nhờ vậy Cloudflare phục vụ JS từ edge, KHÔNG vòng về máy nhà
+    # qua tunnel mỗi lần (chính là nguyên nhân stall 3.5s trước đây).
+    <FilesMatch "\.js$">
+        ExpiresDefault "access plus 1 year"
+        Header set Cache-Control "public, max-age=31536000, immutable"
+        Header append Vary Accept-Encoding
+    </FilesMatch>
+
+    # CSS — cache VĨNH VIỄN như JS: mọi href CSS trong index.html đã có ?v=token
+    # (stamp_version.py đóng dấu MỖI lần deploy → URL mới, không bao giờ stale).
+    <FilesMatch "\.css$">
+        ExpiresDefault "access plus 1 year"
+        Header set Cache-Control "public, max-age=31536000, immutable"
+        Header append Vary Accept-Encoding
+    </FilesMatch>
+
+    # sw.js — KHÔNG cache (ghi đè rule .js phía trên). Service worker phải luôn
+    # được kiểm tra bản mới, nếu dính immutable 1 năm thì client kẹt SW cũ.
+    <FilesMatch "^sw\.js$">
+        ExpiresDefault "access plus 0 seconds"
+        Header set Cache-Control "no-cache, must-revalidate"
+    </FilesMatch>
+
+    # Ảnh, textures, fonts, OSD icons — 30 ngày
+    <FilesMatch "\.(avif|webp|png|jpe?g|gif|ico|svg|woff2?)$">
+        ExpiresDefault "access plus 30 days"
+        Header set Cache-Control "public, max-age=2592000, immutable"
+    </FilesMatch>
+
+    # index.html — 5 phút (hay cập nhật)
+    <FilesMatch "^index\.html$">
+        ExpiresDefault "access plus 5 minutes"
+        Header set Cache-Control "public, max-age=300, must-revalidate"
+    </FilesMatch>
+
+    # JSON workflow — không cache
+    <FilesMatch "\.json$">
+        Header set Cache-Control "no-cache, must-revalidate"
+    </FilesMatch>
+
+    # PHP/API — không cache
+    <FilesMatch "\.php$">
+        Header set Cache-Control "no-cache, no-store, must-revalidate"
+        Header set Pragma "no-cache"
+    </FilesMatch>
+</IfModule>
+
+# ── Keep-Alive ────────────────────────────────────────────────
+<IfModule mod_headers.c>
+    Header set Connection keep-alive
+</IfModule>
+
+FileETag MTime Size

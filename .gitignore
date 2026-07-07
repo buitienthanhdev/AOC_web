@@ -1,0 +1,34 @@
+# Secrets — KHÔNG bao giờ commit
+.env
+
+# Database
+data/colorai_history.db
+data/*.db
+
+# Logs
+*.log
+api_proxy.log
+
+# Upload temp
+uploads/*
+!uploads/.gitkeep
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Python venv / cache
+.venv/
+__pycache__/
+*.pyc
+
+# Model weights (large binary)
+clasify/best.pt
+
+# DB backups / dumps (real data)
+db_backup_temp/
+admin-backup/
+
+
+# Claude Code local config
+.claude/

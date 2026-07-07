@@ -1,0 +1,912 @@
+{
+  "34": {
+    "inputs": {
+      "image": "nha-hat-thanh-pho-1-e1728916856565.jpg"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "House photo (interior / exterior)"
+    }
+  },
+  "35": {
+    "inputs": {
+      "value": "Apply the following paint colors consistently to EVERY matching architectural surface throughout the entire image.\n\nWalls:\nRepaint ALL wall surfaces to #04346E, including every interior or exterior painted wall.\n\nTrim:\nRepaint ALL trim elements to #204A24, including moldings, casings, architraves, cornices, fascia, soffits, skirting boards, decorative trim, borders, and all painted architectural trim.\n\nDoors and Windows:\nRepaint ALL doors and ALL windows to #E49E49, including every door type, every window type, door frames, window frames, sashes, mullions, transoms, shutters, casings, and all visible painted door or window components.\n\nDo not leave any matching surface unpainted."
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "Element Colors / Instruction (VN or EN)"
+    }
+  },
+  "36": {
+    "inputs": {
+      "value": true
+    },
+    "class_type": "PrimitiveBoolean",
+    "_meta": {
+      "title": "Enable Gemma 4 Prompt Refine?"
+    }
+  },
+  "38": {
+    "inputs": {
+      "switch": [
+        "36",
+        0
+      ],
+      "on_false": [
+        "35",
+        0
+      ],
+      "on_true": [
+        "37:10",
+        0
+      ]
+    },
+    "class_type": "ComfySwitchNode",
+    "_meta": {
+      "title": "prompt actually sent to Qwen"
+    }
+  },
+  "39": {
+    "inputs": {
+      "source": [
+        "38",
+        0
+      ]
+    },
+    "class_type": "PreviewAny",
+    "_meta": {
+      "title": "debug: prompt sent to Qwen-Image-Edit"
+    }
+  },
+  "40": {
+    "inputs": {
+      "source": [
+        "37:11",
+        0
+      ]
+    },
+    "class_type": "PreviewAny",
+    "_meta": {
+      "title": "debug: Gemma hex/RGB/HSL breakdown"
+    }
+  },
+  "41": {
+    "inputs": {
+      "value": true
+    },
+    "class_type": "PrimitiveBoolean",
+    "_meta": {
+      "title": "Enable 4-step Lightning LoRA? (fast draft, lower fidelity)"
+    }
+  },
+  "43": {
+    "inputs": {
+      "filename_prefix": "paint_recolor",
+      "images": [
+        "42:33",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "SaveImage"
+    }
+  },
+  "66": {
+    "inputs": {
+      "filename_prefix": "paint_recolor",
+      "images": [
+        "65:64",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "SaveImage"
+    }
+  },
+  "37:1": {
+    "inputs": {
+      "clip_name": "gemma4_e4b_it_fp8_scaled.safetensors",
+      "type": "stable_diffusion",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Load CLIP"
+    }
+  },
+  "37:2": {
+    "inputs": {
+      "value": "<|turn>system\nYou are a color-science-grounded architectural paint visualization assistant working for a paint & coatings company. You are given (1) a photo of a building interior or exterior and (2) the user's raw color instruction, which is often mixed Vietnamese/English and contains HEX codes. You must produce ONE precise, self-contained English edit instruction for an image-editing diffusion model (Qwen-Image-Edit), plus a transparent, verifiable color-math breakdown. You never see the final rendered image, so the instruction you write is the ONLY thing standing between the user's intent and the pixels: be explicit, be literal, do not rely on the diffusion model to infer anything you can state directly.\n\nVOCABULARY -- map Vietnamese terms to the correct architectural surface before writing the instruction:\ntuong / tuong nha = wall | vien / go chi / phao chi = trim / molding | cua = door | cua so / khung cua so = window frame | mai / mai nha = roof | tran / tran nha = ceiling | san / san nha = floor | cot = column | lam / lam go = louvers / battens | lan can / ban cong = railing | ong khoi = chimney | mai hien = eave / soffit | tuong ngoai = exterior wall | tuong noi that = interior wall\n(Vietnamese text may or may not carry diacritics -- match on the root word.)\n\nHEX -> COLOR GROUNDING PROCEDURE -- for EVERY hex code in the user's input, do this arithmetic explicitly and write the result into \"color_grounding\" BEFORE you write \"edit_prompt\". Do this section first; you may reuse its results verbatim afterward.\n  1. Split the 6 hex digits into 3 pairs (RR, GG, BB) and convert each pair from base-16 to base-10.\n     Worked example: #4A5D23 -> R = 0x4A = 74, G = 0x5D = 93, B = 0x23 = 35.\n  2. From that R,G,B, derive approximate HSL (hue in degrees, saturation %, lightness %).\n     Continuing the example: RGB(74,93,35) -> roughly H=80 deg, S=45%, L=25%.\n  3. Name the color the way a paint professional would, grounded in the RGB/HSL you just computed -- not guessed from the hex digits by pattern-matching. Continuing the example: a muted, dark olive-green with earthy/mossy undertones.\n  4. Re-check your own arithmetic before moving to the next code. A wrong digit here means the wrong wall color gets painted -- there is no second chance once this leaves you.\n  5. If the user gave a color as a plain name (\"trang\", \"white\", \"xam dam\") instead of a hex code, ground it the same way in reverse: state the typical hex/RGB range that name refers to, then proceed.\n\nRULES YOU ALWAYS APPLY, regardless of how the user phrases the request:\n  - Recolor ONLY the paintable surfaces the user explicitly assigned a color to (wall, trim, door, window/door frame, fascia, soffit, column, molding, roof, ceiling, floor, railing, etc.). If a surface is not assigned a color, do not mention it and do not change it.\n  - Never redesign geometry, camera angle, perspective, lens, lighting, weather, time of day, shadows, reflections, landscaping, furniture, people, or vehicles. Never add or remove objects.\n  - The new color must sit on the EXISTING material the way real paint would: preserve texture, grain, and surface imperfections; respect existing shading, ambient occlusion, highlights and reflections. Never produce a flat, texture-less color overlay.\n  - Never recolor glass, sky, vegetation, people, vehicles, unpainted natural stone/brick, bare wood grain not covered by a color assignment, metal hardware, or pavement.\n  - Demand clean, accurate edges in the instruction: no bleeding of one surface's new color onto an adjacent unassigned surface.\n  - Look at the attached photo before finalizing. Only write instructions for elements that are actually visible in the photo. If the user names an element that is not visible, keep it out of \"edit_prompt\" and list it in \"elements_skipped\" instead of inventing it.\n  - If the user's raw input contains no usable color assignment at all, set \"edit_prompt\" to the single word NONE and explain why in \"notes\".\n\nOUTPUT CONTRACT -- reply with ONE JSON object and nothing else: no markdown fences, no preamble, no text before or after the braces. Use exactly these four keys, in exactly this order, all values are plain strings (never nested objects/arrays):\n{\"color_grounding\": \"one line per hex code, formatted 'element (EN) | hex | rgb | hsl | color name', lines separated by \\n, or 'none' if no hex codes were given\", \"elements_skipped\": \"elements the user named but that are not visible in the photo, or 'none'\", \"notes\": \"anything ambiguous, assumed, or translated, or 'none'\", \"edit_prompt\": \"the final self-contained English instruction, one clear imperative sentence per surface changed (using the color names you derived above), ending with an explicit clause to keep every other element of the photo identical\"}<turn|>"
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "SYSTEM_PROMPT (hex grounding + JSON contract)"
+    }
+  },
+  "37:3": {
+    "inputs": {
+      "string": "<|turn>user\n{user_prompt}<turn|>\n<|turn>model\n",
+      "find": "{user_prompt}",
+      "replace": [
+        "35",
+        0
+      ]
+    },
+    "class_type": "StringReplace",
+    "_meta": {
+      "title": "Wrap user turn (<turn|> closed correctly)"
+    }
+  },
+  "37:4": {
+    "inputs": {
+      "string_a": [
+        "37:2",
+        0
+      ],
+      "string_b": [
+        "37:3",
+        0
+      ],
+      "delimiter": ""
+    },
+    "class_type": "StringConcatenate",
+    "_meta": {
+      "title": "system + user turn"
+    }
+  },
+  "37:5": {
+    "inputs": {
+      "prompt": [
+        "37:4",
+        0
+      ],
+      "max_length": 2048,
+      "sampling_mode": "on",
+      "sampling_mode.temperature": 0.2,
+      "sampling_mode.top_k": 64,
+      "sampling_mode.top_p": 0.9,
+      "sampling_mode.min_p": 0.05,
+      "sampling_mode.repetition_penalty": 1.05,
+      "sampling_mode.seed": 0,
+      "sampling_mode.presence_penalty": 0,
+      "thinking": false,
+      "use_default_template": false,
+      "clip": [
+        "37:1",
+        0
+      ],
+      "image": [
+        "34",
+        0
+      ]
+    },
+    "class_type": "TextGenerate",
+    "_meta": {
+      "title": "Gemma 4 (E4B) -- color grounding + edit-prompt writer"
+    }
+  },
+  "37:6": {
+    "inputs": {
+      "source": [
+        "37:5",
+        0
+      ]
+    },
+    "class_type": "PreviewAny",
+    "_meta": {
+      "title": "debug: raw Gemma output"
+    }
+  },
+  "37:7": {
+    "inputs": {
+      "string": [
+        "37:6",
+        0
+      ],
+      "regex_pattern": "^```(?:json)?\\s*\\n?",
+      "replace": "",
+      "case_insensitive": false,
+      "multiline": false,
+      "dotall": false,
+      "count": 1
+    },
+    "class_type": "RegexReplace",
+    "_meta": {
+      "title": "strip leading ```json fence"
+    }
+  },
+  "37:8": {
+    "inputs": {
+      "string": [
+        "37:7",
+        0
+      ],
+      "regex_pattern": "\\n?```\\s*$",
+      "replace": "",
+      "case_insensitive": false,
+      "multiline": false,
+      "dotall": false,
+      "count": 1
+    },
+    "class_type": "RegexReplace",
+    "_meta": {
+      "title": "strip trailing ``` fence"
+    }
+  },
+  "37:9": {
+    "inputs": {
+      "source": [
+        "37:8",
+        0
+      ]
+    },
+    "class_type": "PreviewAny",
+    "_meta": {
+      "title": "debug: cleaned JSON"
+    }
+  },
+  "37:10": {
+    "inputs": {
+      "json_string": [
+        "37:8",
+        0
+      ],
+      "key": "edit_prompt"
+    },
+    "class_type": "JsonExtractString",
+    "_meta": {
+      "title": "extract: edit_prompt"
+    }
+  },
+  "37:11": {
+    "inputs": {
+      "json_string": [
+        "37:8",
+        0
+      ],
+      "key": "color_grounding"
+    },
+    "class_type": "JsonExtractString",
+    "_meta": {
+      "title": "extract: color_grounding"
+    }
+  },
+  "37:12": {
+    "inputs": {
+      "source": [
+        "37:10",
+        0
+      ]
+    },
+    "class_type": "PreviewAny",
+    "_meta": {
+      "title": "debug: final edit_prompt"
+    }
+  },
+  "42:13": {
+    "inputs": {
+      "unet_name": "Qwen-Image-Edit-2511-FP8_e4m3fn.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Load Diffusion Model"
+    }
+  },
+  "42:14": {
+    "inputs": {
+      "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+      "type": "qwen_image",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Load CLIP"
+    }
+  },
+  "42:15": {
+    "inputs": {
+      "vae_name": "qwen_image_vae.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load VAE"
+    }
+  },
+  "42:16": {
+    "inputs": {
+      "lora_name": "Qwen-Image-2512-Lightning-4steps-V1.0-fp32.safetensors",
+      "strength_model": 1,
+      "model": [
+        "42:13",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "Load LoRA"
+    }
+  },
+  "42:17": {
+    "inputs": {
+      "switch": [
+        "41",
+        0
+      ],
+      "on_false": [
+        "42:13",
+        0
+      ],
+      "on_true": [
+        "42:16",
+        0
+      ]
+    },
+    "class_type": "ComfySwitchNode",
+    "_meta": {
+      "title": "MODEL: full vs Lightning"
+    }
+  },
+  "42:18": {
+    "inputs": {
+      "value": 40
+    },
+    "class_type": "PrimitiveInt",
+    "_meta": {
+      "title": "Steps (full quality)"
+    }
+  },
+  "42:19": {
+    "inputs": {
+      "value": 4
+    },
+    "class_type": "PrimitiveInt",
+    "_meta": {
+      "title": "Steps (4-step Lightning)"
+    }
+  },
+  "42:20": {
+    "inputs": {
+      "switch": [
+        "41",
+        0
+      ],
+      "on_false": [
+        "42:18",
+        0
+      ],
+      "on_true": [
+        "42:19",
+        0
+      ]
+    },
+    "class_type": "ComfySwitchNode",
+    "_meta": {
+      "title": "Steps switch"
+    }
+  },
+  "42:21": {
+    "inputs": {
+      "value": 4
+    },
+    "class_type": "PrimitiveFloat",
+    "_meta": {
+      "title": "CFG (full quality)"
+    }
+  },
+  "42:22": {
+    "inputs": {
+      "value": 1
+    },
+    "class_type": "PrimitiveFloat",
+    "_meta": {
+      "title": "CFG (4-step Lightning)"
+    }
+  },
+  "42:23": {
+    "inputs": {
+      "switch": [
+        "41",
+        0
+      ],
+      "on_false": [
+        "42:21",
+        0
+      ],
+      "on_true": [
+        "42:22",
+        0
+      ]
+    },
+    "class_type": "ComfySwitchNode",
+    "_meta": {
+      "title": "CFG switch"
+    }
+  },
+  "42:24": {
+    "inputs": {
+      "image": [
+        "34",
+        0
+      ]
+    },
+    "class_type": "FluxKontextImageScale",
+    "_meta": {
+      "title": "scale image to Qwen-Edit resolution bucket"
+    }
+  },
+  "42:25": {
+    "inputs": {
+      "pixels": [
+        "42:24",
+        0
+      ],
+      "vae": [
+        "42:15",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "shape source for KSampler (denoise=1)"
+    }
+  },
+  "42:26": {
+    "inputs": {
+      "prompt": [
+        "38",
+        0
+      ],
+      "clip": [
+        "42:14",
+        0
+      ],
+      "vae": [
+        "42:15",
+        0
+      ],
+      "image1": [
+        "42:24",
+        0
+      ]
+    },
+    "class_type": "TextEncodeQwenImageEditPlus",
+    "_meta": {
+      "title": "positive (edit_prompt from Gemma)"
+    }
+  },
+  "42:27": {
+    "inputs": {
+      "prompt": "",
+      "clip": [
+        "42:14",
+        0
+      ],
+      "vae": [
+        "42:15",
+        0
+      ],
+      "image1": [
+        "42:24",
+        0
+      ]
+    },
+    "class_type": "TextEncodeQwenImageEditPlus",
+    "_meta": {
+      "title": "negative (empty prompt)"
+    }
+  },
+  "42:28": {
+    "inputs": {
+      "reference_latents_method": "index_timestep_zero",
+      "conditioning": [
+        "42:26",
+        0
+      ]
+    },
+    "class_type": "FluxKontextMultiReferenceLatentMethod",
+    "_meta": {
+      "title": "Edit Model Reference Method (+)"
+    }
+  },
+  "42:29": {
+    "inputs": {
+      "reference_latents_method": "index_timestep_zero",
+      "conditioning": [
+        "42:27",
+        0
+      ]
+    },
+    "class_type": "FluxKontextMultiReferenceLatentMethod",
+    "_meta": {
+      "title": "Edit Model Reference Method (-)"
+    }
+  },
+  "42:30": {
+    "inputs": {
+      "shift": 3.1,
+      "model": [
+        "42:17",
+        0
+      ]
+    },
+    "class_type": "ModelSamplingAuraFlow",
+    "_meta": {
+      "title": "shift=3.1 (verified 2511 default)"
+    }
+  },
+  "42:31": {
+    "inputs": {
+      "strength": 1,
+      "pre_cfg": false,
+      "model": [
+        "42:30",
+        0
+      ]
+    },
+    "class_type": "CFGNorm",
+    "_meta": {
+      "title": "CFGNorm strength=1"
+    }
+  },
+  "42:32": {
+    "inputs": {
+      "seed": 130771483021302,
+      "steps": [
+        "42:20",
+        0
+      ],
+      "cfg": [
+        "42:23",
+        0
+      ],
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "42:31",
+        0
+      ],
+      "positive": [
+        "42:28",
+        0
+      ],
+      "negative": [
+        "42:29",
+        0
+      ],
+      "latent_image": [
+        "42:25",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "42:33": {
+    "inputs": {
+      "samples": [
+        "42:32",
+        0
+      ],
+      "vae": [
+        "42:15",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAEDecode"
+    }
+  },
+  "65:44": {
+    "inputs": {
+      "unet_name": "Qwen-Image-Edit-2511-FP8_e4m3fn.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Load Diffusion Model"
+    }
+  },
+  "65:45": {
+    "inputs": {
+      "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+      "type": "qwen_image",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Load CLIP"
+    }
+  },
+  "65:46": {
+    "inputs": {
+      "vae_name": "qwen_image_vae.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load VAE"
+    }
+  },
+  "65:47": {
+    "inputs": {
+      "lora_name": "Qwen-Image-2512-Lightning-4steps-V1.0-fp32.safetensors",
+      "strength_model": 1,
+      "model": [
+        "65:44",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "Load LoRA"
+    }
+  },
+  "65:48": {
+    "inputs": {
+      "switch": true,
+      "on_false": [
+        "65:44",
+        0
+      ],
+      "on_true": [
+        "65:47",
+        0
+      ]
+    },
+    "class_type": "ComfySwitchNode",
+    "_meta": {
+      "title": "MODEL: full vs Lightning"
+    }
+  },
+  "65:49": {
+    "inputs": {
+      "value": 40
+    },
+    "class_type": "PrimitiveInt",
+    "_meta": {
+      "title": "Steps (full quality)"
+    }
+  },
+  "65:50": {
+    "inputs": {
+      "value": 4
+    },
+    "class_type": "PrimitiveInt",
+    "_meta": {
+      "title": "Steps (4-step Lightning)"
+    }
+  },
+  "65:51": {
+    "inputs": {
+      "switch": true,
+      "on_false": [
+        "65:49",
+        0
+      ],
+      "on_true": [
+        "65:50",
+        0
+      ]
+    },
+    "class_type": "ComfySwitchNode",
+    "_meta": {
+      "title": "Steps switch"
+    }
+  },
+  "65:52": {
+    "inputs": {
+      "value": 4
+    },
+    "class_type": "PrimitiveFloat",
+    "_meta": {
+      "title": "CFG (full quality)"
+    }
+  },
+  "65:53": {
+    "inputs": {
+      "value": 1
+    },
+    "class_type": "PrimitiveFloat",
+    "_meta": {
+      "title": "CFG (4-step Lightning)"
+    }
+  },
+  "65:54": {
+    "inputs": {
+      "switch": true,
+      "on_false": [
+        "65:52",
+        0
+      ],
+      "on_true": [
+        "65:53",
+        0
+      ]
+    },
+    "class_type": "ComfySwitchNode",
+    "_meta": {
+      "title": "CFG switch"
+    }
+  },
+  "65:55": {
+    "inputs": {
+      "image": [
+        "42:33",
+        0
+      ]
+    },
+    "class_type": "FluxKontextImageScale",
+    "_meta": {
+      "title": "scale image to Qwen-Edit resolution bucket"
+    }
+  },
+  "65:56": {
+    "inputs": {
+      "pixels": [
+        "65:55",
+        0
+      ],
+      "vae": [
+        "65:46",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "shape source for KSampler (denoise=1)"
+    }
+  },
+  "65:57": {
+    "inputs": {
+      "prompt": "TASK\n\nTransform the uploaded architectural image from daytime into a genuine professional nighttime architectural photograph.\n\nThe uploaded image is the only source of truth.\n\nThis transformation applies to both exterior and interior architecture.\n\nThe objective is not to redesign, renovate, restyle, enhance, or generate a new image.\n\nThe objective is to transform the existing photograph into the exact same scene photographed several hours after sunset.\n\nOnly the lighting conditions and time of day may change.\n\nEverything else must remain visually identical.\n\n==================================================\nTARGET RESULT\n==================================================\n\nThe final image must be indistinguishable from a real architectural photograph captured at night.\n\nIt should look as though a professional architectural photographer returned to the exact same location after dark and photographed the scene again using the same camera, composition, lens, viewpoint and framing.\n\nThe transformation must affect the entire image consistently.\n\nNo part of the image should retain the appearance of daytime.\n\nThe result must never resemble an edited daytime photograph.\n\nIt must resemble an authentic nighttime photograph.\n\n==================================================\nSCENE PRESERVATION\n==================================================\n\nPreserve exactly:\n\nArchitecture\n\nGeometry\n\nScale\n\nComposition\n\nPerspective\n\nCamera position\n\nLens characteristics\n\nCropping\n\nLandscape\n\nFurniture\n\nDecorations\n\nObjects\n\nRoads\n\nVehicles\n\nPlants\n\nPeople\n\nBuilding details\n\nSurface materials\n\nSurface textures\n\nMaterial colors\n\nPaint colors\n\nGlass\n\nMetal\n\nWood\n\nConcrete\n\nStone\n\nBrick\n\nRoof\n\nWalls\n\nDoors\n\nWindows\n\nTrim\n\nNo architectural element may be added, removed or redesigned.\n\n==================================================\nNIGHTTIME ENVIRONMENT\n==================================================\n\nTransform the environment into deep nighttime.\n\nThe scene should appear to have been photographed several hours after sunset.\n\nThe sky should become naturally dark.\n\nAll visible daylight must disappear.\n\nNatural daylight illumination should no longer exist.\n\nThe environment should become substantially darker while preserving realistic visibility.\n\nShadows should become deeper.\n\nContrast should increase naturally.\n\nThe illuminated architecture should become the dominant visual subject.\n\n==================================================\nLIGHT SOURCES\n==================================================\n\nEvery visible light must originate only from a physically believable existing source.\n\nAcceptable light sources include:\n\nInterior rooms visible through existing windows.\n\nExisting architectural wall lights.\n\nExisting porch lights.\n\nExisting ceiling lights.\n\nExisting garage lights.\n\nExisting landscape lighting.\n\nExisting pathway lighting.\n\nExisting pool lighting.\n\nExisting street lights.\n\nExisting traffic lights.\n\nExisting illuminated signs.\n\nExisting neighboring buildings with illuminated windows.\n\nExisting decorative lighting already visible or physically implied.\n\nNever invent additional lighting fixtures.\n\nNever invent additional windows.\n\nNever invent additional illuminated rooms.\n\nNever create illumination without a believable light source.\n\n==================================================\nLIGHTING\n==================================================\n\nArtificial lighting should become the primary illumination of the entire scene.\n\nExisting light sources should appear naturally brighter after dark.\n\nInterior lighting should emit warm, inviting illumination through existing windows.\n\nArchitectural lighting should softly illuminate nearby walls, columns, entrances, balconies, soffits and surrounding architectural details.\n\nLight should propagate naturally across nearby surfaces.\n\nBrightness should gradually decrease with distance from the light source.\n\nDark areas should remain dark.\n\nOnly surfaces reached by light should become illuminated.\n\nAvoid uniform brightness across the entire building.\n\nThe lighting should feel elegant, premium and naturally integrated into the architecture.\n\n==================================================\nWINDOWS\n==================================================\n\nWindows should appear naturally illuminated from occupied interior spaces.\n\nWarm interior lighting should be visible through the glass.\n\nWindow illumination should become one of the brightest visual elements.\n\nInterior spaces should remain believable rather than overexposed.\n\nGlass should simultaneously show interior lighting and realistic exterior reflections.\n\nSubtle optical bloom around bright windows is acceptable.\n\n==================================================\nINTERIOR SCENES\n==================================================\n\nIf the uploaded image depicts an interior space:\n\nReplace exterior daylight visible through windows with realistic nighttime views.\n\nPreserve the complete room layout.\n\nPreserve all furniture.\n\nPreserve decorations.\n\nPreserve materials.\n\nExisting artificial lighting should become the primary light source.\n\nThe room should feel naturally illuminated for nighttime occupancy.\n\n==================================================\nREFLECTIONS\n==================================================\n\nAll reflective materials should react naturally to nighttime lighting.\n\nGlass should reflect nearby illuminated architecture.\n\nMetal should preserve realistic highlights.\n\nStone and polished materials should exhibit believable low-light reflections.\n\nEvery reflection should correspond to an existing light source.\n\n==================================================\nPHOTOGRAPHIC APPEARANCE\n==================================================\n\nSimulate a professional architectural night photograph.\n\nExpose for illuminated architecture rather than the surrounding darkness.\n\nMaintain deep shadows.\n\nPreserve highlight detail.\n\nMaintain realistic dynamic range.\n\nMaintain natural white balance for nighttime photography.\n\nMaintain realistic local contrast.\n\nUse subtle optical bloom only around bright light sources.\n\nAvoid exaggerated glow.\n\nAvoid artificial HDR appearance.\n\nAvoid CGI appearance.\n\nAvoid fantasy lighting.\n\nThe image should resemble a high-end commercial architectural photograph published in an architecture or luxury real estate magazine.\n\n==================================================\nGLOBAL CONSISTENCY\n==================================================\n\nEvery part of the image must consistently reflect nighttime conditions.\n\nMaterials, reflections, shadows, contrast, exposure and lighting should all agree with one another.\n\nNo object should retain daytime illumination.\n\nNo surface should appear partially converted.\n\nThe entire scene must appear to have been photographed under a single, coherent nighttime lighting environment.\n\n==================================================\nFORBIDDEN\n==================================================\n\nDo not redesign architecture.\n\nDo not alter geometry.\n\nDo not repaint any surface.\n\nDo not change material colors.\n\nDo not change furniture.\n\nDo not add or remove objects.\n\nDo not add new lighting fixtures.\n\nDo not create fantasy lighting.\n\nDo not create blue hour, sunset, dusk or twilight.\n\nDo not brighten the entire image uniformly.\n\nDo not create unrealistic glow.\n\nDo not produce a CGI render.\n\nDo not produce an AI-art appearance.\n\n==================================================\nOUTPUT\n==================================================\n\nProduce a photorealistic professional architectural night photograph.\n\nThe result should convincingly appear as the same real location photographed several hours after sunset with professional architectural photography, while preserving every physical aspect of the original scene except for the natural transition from daytime to nighttime.",
+      "clip": [
+        "65:45",
+        0
+      ],
+      "vae": [
+        "65:46",
+        0
+      ],
+      "image1": [
+        "65:55",
+        0
+      ]
+    },
+    "class_type": "TextEncodeQwenImageEditPlus",
+    "_meta": {
+      "title": "positive (edit_prompt from Gemma)"
+    }
+  },
+  "65:58": {
+    "inputs": {
+      "prompt": "daytime,\nsunlight,\nbright sky,\nblue sky,\nmorning,\nafternoon,\nchanging structure,\nchanging architecture,\nchanging wall colors,\nchanging door colors,\nchanging trim colors,\naltering composition,\nmorphing,\nrepainting,\nadding objects,\nremoving objects,\nlow resolution,\nblurry,\ndistorted details,\noversharpen,\noverexposed,\nunderexposed,\nfake bloom,\ncgi,\ncartoon,\nillustration,\nstylized,\nneon lighting,\nfloating lights,\nglowing halos,\nhdr,\ncolor shift",
+      "clip": [
+        "65:45",
+        0
+      ],
+      "vae": [
+        "65:46",
+        0
+      ],
+      "image1": [
+        "65:55",
+        0
+      ]
+    },
+    "class_type": "TextEncodeQwenImageEditPlus",
+    "_meta": {
+      "title": "negative (empty prompt)"
+    }
+  },
+  "65:59": {
+    "inputs": {
+      "reference_latents_method": "index_timestep_zero",
+      "conditioning": [
+        "65:57",
+        0
+      ]
+    },
+    "class_type": "FluxKontextMultiReferenceLatentMethod",
+    "_meta": {
+      "title": "Edit Model Reference Method (+)"
+    }
+  },
+  "65:60": {
+    "inputs": {
+      "reference_latents_method": "index_timestep_zero",
+      "conditioning": [
+        "65:58",
+        0
+      ]
+    },
+    "class_type": "FluxKontextMultiReferenceLatentMethod",
+    "_meta": {
+      "title": "Edit Model Reference Method (-)"
+    }
+  },
+  "65:61": {
+    "inputs": {
+      "shift": 3.1,
+      "model": [
+        "65:48",
+        0
+      ]
+    },
+    "class_type": "ModelSamplingAuraFlow",
+    "_meta": {
+      "title": "shift=3.1 (verified 2511 default)"
+    }
+  },
+  "65:62": {
+    "inputs": {
+      "strength": 1,
+      "pre_cfg": false,
+      "model": [
+        "65:61",
+        0
+      ]
+    },
+    "class_type": "CFGNorm",
+    "_meta": {
+      "title": "CFGNorm strength=1"
+    }
+  },
+  "65:63": {
+    "inputs": {
+      "seed": 363440412405009,
+      "steps": [
+        "65:51",
+        0
+      ],
+      "cfg": [
+        "65:54",
+        0
+      ],
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "65:62",
+        0
+      ],
+      "positive": [
+        "65:59",
+        0
+      ],
+      "negative": [
+        "65:60",
+        0
+      ],
+      "latent_image": [
+        "65:56",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "65:64": {
+    "inputs": {
+      "samples": [
+        "65:63",
+        0
+      ],
+      "vae": [
+        "65:46",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAEDecode"
+    }
+  }
+}
